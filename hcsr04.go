@@ -3,6 +3,7 @@ package rangefinder
 import (
 	"fmt"
 	"gpio"
+	"gpio/events"
 	"time"
 )
 
@@ -15,11 +16,11 @@ const (
 )
 
 type HCSR04 struct {
-	triggerGPIO gpio.RpiGPIO
-	signalGPIO gpio.RpiGPIO
+	triggerGPIO gpio.GPIO
+	signalGPIO gpio.GPIO
 }
 
-func sendTrigger(triggerGPIO gpio.RpiGPIO) error {
+func sendTrigger(triggerGPIO gpio.GPIO) error {
 	// handle errs
 	triggerGPIO.WriteValue(1)
 	time.Sleep(triggerSleep)
@@ -27,27 +28,15 @@ func sendTrigger(triggerGPIO gpio.RpiGPIO) error {
 	return nil
 }
 
-func captureResponse(signalGPIO gpio.RpiGPIO) (time.Time, time.Time, error) {
-	startTime := time.Now() // just in case? Maybe a bad idea
-	var endTime time.Time
+func captureResponse(signalGPIO gpio.GPIO) (time.Time, time.Time, error) {
+	eventCh, ctrlCh := events.StartEdgeTrigger(signalGPIO)
 
-	// factor out the loop, also add timeouts or some other sanity check
-	// maybe we missed the boat on the 0 ...
-	for val, err := signalGPIO.ReadValue(); val == 0; val, err = signalGPIO.ReadValue() {
-		startTime = time.Now()
-		if err != nil {
-			return time.Now(), time.Now(), err
-		}
-	}
+	startEvent := <-eventCh
+	// check the event
+	endEvent := <-eventCh
 
-	for val, err := signalGPIO.ReadValue(); val == 1; val, err = signalGPIO.ReadValue() {
-		endTime = time.Now()
-		if err != nil {
-			return time.Now(), time.Now(), err
-		}
-	}
-
-	return startTime, endTime, nil // return some Timeout error
+	events.StopEdgeTrigger(ctrlCh)
+	return startEvent.Timestamp, endEvent.Timestamp, nil // return some Timeout error
 }
 
 func calculateDistace(startTime time.Time, endTime time.Time) float32 {
@@ -74,6 +63,6 @@ func NewHCSRO4(triggerPin int, signalPin int) (*HCSR04, error) {
 		return nil, err
 	}
 
-	return &HCSR04{triggerGPIO: *triggerGPIO,
-		signalGPIO: *signalGPIO}, nil
+	return &HCSR04{triggerGPIO: triggerGPIO,
+		signalGPIO: signalGPIO}, nil
 }
