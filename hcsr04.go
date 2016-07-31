@@ -25,6 +25,17 @@ type eventLength struct {
 	err error
 }
 
+func waitForInputLow(pin gpio.GPIO) error {
+	val, err := pin.ReadValue()
+	for val != 1 {
+		val, err = pin.ReadValue()
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
 func sendTrigger(triggerGPIO gpio.GPIO) error {
 	// handle errs
 	triggerGPIO.WriteValue(1)
@@ -56,6 +67,7 @@ func calculateDistace(startTime time.Time, endTime time.Time) float32 {
 
 func (h *HCSR04) Distance_cm() (float32, error) {
 	// error handling
+	waitForInputLow(h.signalGPIO)
 	resultCh := make(chan eventLength)
 	go captureResponse(h.signalGPIO, resultCh)
 	<-resultCh // make sure stuff is started
