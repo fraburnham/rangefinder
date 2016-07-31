@@ -1,7 +1,6 @@
 package rangefinder
 
 import (
-	"fmt"
 	"gpio"
 	"gpio/events"
 	"time"
@@ -35,7 +34,7 @@ func sendTrigger(triggerGPIO gpio.GPIO) error {
 }
 
 func captureResponse(signalGPIO gpio.GPIO, resultCh chan eventLength) {
-	eventCh, ctrlCh := events.StartEdgeTrigger(signalGPIO)
+	eventCh, ctrlCh := events.StartEdgeTrigger(signalGPIO, 2)
 
 	startEvent := <-eventCh
 	// check the event
@@ -49,7 +48,6 @@ func captureResponse(signalGPIO gpio.GPIO, resultCh chan eventLength) {
 
 func calculateDistace(startTime time.Time, endTime time.Time) float32 {
 	durationBetween := endTime.Sub(startTime)
-	fmt.Println("Time between millis: ", durationBetween) // sometimes this goes negative...
 	return float32((durationBetween.Seconds() * speed_of_sound_cm_s) / 2)
 }
 
