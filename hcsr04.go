@@ -20,6 +20,12 @@ type HCSR04 struct {
 	signalGPIO gpio.GPIO
 }
 
+type eventLength struct {
+	startTime time.Time
+	endTime time.Time
+	err error
+}
+
 func sendTrigger(triggerGPIO gpio.GPIO) error {
 	// handle errs
 	triggerGPIO.WriteValue(1)
@@ -28,7 +34,7 @@ func sendTrigger(triggerGPIO gpio.GPIO) error {
 	return nil
 }
 
-func captureResponse(signalGPIO gpio.GPIO) (time.Time, time.Time, error) {
+func captureResponse(signalGPIO gpio.GPIO, resultCh chan eventLength) {
 	eventCh, ctrlCh := events.StartEdgeTrigger(signalGPIO)
 
 	startEvent := <-eventCh
@@ -36,7 +42,9 @@ func captureResponse(signalGPIO gpio.GPIO) (time.Time, time.Time, error) {
 	endEvent := <-eventCh
 
 	events.StopEdgeTrigger(ctrlCh)
-	return startEvent.Timestamp, endEvent.Timestamp, nil // return some Timeout error
+	resultCh <- eventLength{startTime: startEvent.Timestamp,
+		endTime: endEvent.Timestamp,
+		err: nil} // return some Timeout error
 }
 
 func calculateDistace(startTime time.Time, endTime time.Time) float32 {
@@ -47,9 +55,12 @@ func calculateDistace(startTime time.Time, endTime time.Time) float32 {
 
 func (h *HCSR04) Distance_cm() (float32, error) {
 	// error handling
+	resultCh := make(chan eventLength)
+	go captureResponse(h.signalGPIO, resultCh)
 	sendTrigger(h.triggerGPIO)
-	startTime, endTime, _ := captureResponse(h.signalGPIO)
-	return calculateDistace(startTime, endTime), nil
+	length := <-resultCh
+	// error handling!
+	return calculateDistace(length.startTime, length.endTime), nil
 }
 
 func NewHCSRO4(triggerPin int, signalPin int) (*HCSR04, error) {
