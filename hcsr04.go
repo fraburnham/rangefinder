@@ -36,6 +36,9 @@ func sendTrigger(triggerGPIO gpio.GPIO) error {
 func captureResponse(signalGPIO gpio.GPIO, resultCh chan eventLength) {
 	eventCh, ctrlCh := events.StartEdgeTrigger(signalGPIO, 2)
 
+	//ready message
+	resultCh <- eventLength{}
+
 	startEvent := <-eventCh
 	// check the event
 	endEvent := <-eventCh
@@ -55,6 +58,7 @@ func (h *HCSR04) Distance_cm() (float32, error) {
 	// error handling
 	resultCh := make(chan eventLength)
 	go captureResponse(h.signalGPIO, resultCh)
+	<-resultCh // make sure stuff is started
 	sendTrigger(h.triggerGPIO)
 	length := <-resultCh
 	// error handling!
