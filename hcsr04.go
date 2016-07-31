@@ -1,6 +1,7 @@
 package rangefinder
 
 import (
+	"errors"
 	"gpio"
 	"gpio/events"
 	"time"
@@ -25,6 +26,11 @@ type eventLength struct {
 	err error
 }
 
+func timeout(timeoutCh chan bool, d time.Duration) {
+	time.Sleep(d)
+	timeoutCh <- true
+}
+
 func waitForInputLow(pin gpio.GPIO) error {
 	val, err := pin.ReadValue()
 	for val != 1 {
@@ -44,17 +50,37 @@ func sendTrigger(triggerGPIO gpio.GPIO) error {
 	return nil
 }
 
+// d Duration is bad naming!
+func captureEvent(eventCh chan events.EdgeEvent, d time.Duration) (events.EdgeEvent, error) {
+	timeoutCh := make(chan bool)
+	go timeout(timeoutCh, d)
+	select {
+	case <-timeoutCh:
+		return events.EdgeEvent{}, errors.New("TIMEOUT!")
+	case startEvent := <-eventCh:
+		return startEvent, nil
+	}
+}
+
 func captureResponse(signalGPIO gpio.GPIO, resultCh chan eventLength) {
 	eventCh, ctrlCh := events.StartEdgeTrigger(signalGPIO, 2)
 
 	//ready message
 	resultCh <- eventLength{}
 
-	startEvent := <-eventCh
+	startEvent, err := captureEvent(eventCh, (1 * time.Second))
+	if err != nil {
+		panic(err) // this should return the "timeout error"
+	}
+
 	// check the event
-	endEvent := <-eventCh
+	endEvent, err := captureEvent(eventCh, (1 * time.Second))
+	if err != nil {
+		panic(err)
+	}
 
 	events.StopEdgeTrigger(ctrlCh)
+
 	resultCh <- eventLength{startTime: startEvent.Timestamp,
 		endTime: endEvent.Timestamp,
 		err: nil} // return some Timeout error
